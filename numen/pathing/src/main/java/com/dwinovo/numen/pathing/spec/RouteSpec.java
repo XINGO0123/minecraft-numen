@@ -57,12 +57,15 @@ public record RouteSpec(boolean dig, boolean place, boolean consent, double cons
 
     /**
      * 出厂规格:只走不改(不挖、不放;要问主人的格算能走,价钱乘 {@link #CONSENT_MULTIPLIER},许挖或许放时才用得上),
-     * 不跑酷平跳;不愿受摔伤(满血的生存身体就是原版摔不疼的 3 格,创造模式不摔伤、不限);排除岩浆、危险、流水、机关(压力板、绊线)、易碎(耕地、海龟蛋)——流水会把身体推离路线,后两类会被踩坏或
-     * 会触发,都默认不进,规格可以放开;放置 20、挖掘另加 10(约等于多走 2 格:破坏是绕不开时的下策;Baritone 另加 2、mineflayer-pathfinder 另加 1,取 10 的依据见 ADR 0037)、起跳 2、涉水 3、紧挨一格伤身的方块走加 2 格平走的耗时。
+     * 不跑酷平跳;不愿受摔伤(满血的生存身体就是原版摔不疼的 3 格,创造模式不摔伤、不限);排除岩浆、危险、流水、机关(压力板、绊线)——流水会把身体推离路线,
+     * 后两类会被触发,都默认不进,规格可以放开;放置 20、挖掘另加 10(约等于多走 2 格:破坏是绕不开时的下策;Baritone 另加 2、mineflayer-pathfinder 另加 1,取 10 的依据见 ADR 0037)、起跳 2、涉水 3、紧挨一格伤身的方块走加 2 格平走的耗时。
+     *
+     * <p>易碎(耕地、海龟蛋)不进默认排除:原版只有从高处落到它上面才踩坏,平走过去什么也不会发生,而排掉一整片田会让"走进麦田收麦子"根本没有路
+     * (issue #168/#171)。落地那一步由 {@link Contact} 按 {@code Kind.FRAGILE} 单独拒掉({@code Reason.TRAMPLES}),该踩坏的情形一样不会踩坏。
      */
     private static final RouteSpec DEFAULTS = new RouteSpec(
             false, false, true, CONSENT_MULTIPLIER, false,
-            0, UNLIMITED, EnumSet.of(Kind.LAVA, Kind.HAZARD, Kind.FLOWING_WATER, Kind.TRIGGER, Kind.FRAGILE),
+            0, UNLIMITED, EnumSet.of(Kind.LAVA, Kind.HAZARD, Kind.FLOWING_WATER, Kind.TRIGGER),
             PositionCosts.EMPTY, BlockBans.EMPTY, 20.0, 10.0, 2.0, 3.0, 2.0);
 
     public RouteSpec {

@@ -14,7 +14,7 @@ import net.minecraft.core.BlockPos;
  *   <li><b>抬高过的估价</b>:一段搜索没搜到这段的终点,它展开过的节点比估价更远({@link Learning}),每一格的增量记在这里,
  *       以后所有搜索的估价都是"原估价 + 这里的增量"({@link Estimate}),同一处死路不会撞第二次。LRTA* 一族在有限的世界里保证到达
  *       就靠这个 [Korf 1990;Koenig &amp; Sun 2009]。增量是对着这一趟的目标算的,换了目标就失效({@link #forgetRaised});</li>
- *   <li><b>走不通的步</b>:执行里一步走不下去或卡住,这一步(走法、起点、落点)记为不通,以后的搜索不再走它(D* 一族发现与世界
+ *   <li><b>走不通的步</b>:执行里一步走不下去或卡住,这一步(走法、起点、落点)连同周围一圈记为不通,以后的搜索不再走它(D* 一族发现与世界
  *       不符就把那一处改掉再规划 [Stentz 1994])。这是世界的事实,换了目标仍然有效。</li>
  * </ul>
  *
@@ -25,6 +25,8 @@ public final class TripMemory {
     private final Long2DoubleOpenHashMap raised = new Long2DoubleOpenHashMap();
     /** 走不通的步:起点 → 依次是走法的序号与落点,两个一组。 */
     private final Long2ObjectOpenHashMap<LongArrayList> blocked = new Long2ObjectOpenHashMap<>();
+    /** 走不通的步最多记这么多条(一处失败记 27 条),记满就不再长:病态循环不该把它撑成泄漏。 */
+    private static final int MAX_BLOCKED = 27 * 64;
     private Frozen frozen = Frozen.NONE;
     private boolean changed;
 
@@ -47,16 +49,35 @@ public final class TripMemory {
         return raised;
     }
 
-    /** 这一步在这一趟里走不通。 */
+    /**
+     * 这一步在这一趟里走不通。连它周围一圈的同样一步一起记:水流、活塞、别的生物会把身体挤偏一格,偏了一格的那一步重试还是走不通,
+     * 却因为坐标不同被当成新情况,于是原地来回重搜(issue #157)。
+     */
     public void block(MoveKind kind, BlockPos from, BlockPos to) {
-        LongArrayList steps = blocked.computeIfAbsent(from.asLong(), k -> new LongArrayList());
+        if (blockedSteps() >= MAX_BLOCKED) {
+            return;
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    record(kind,
+                            from.getX() + dx, from.getY() + dy, from.getZ() + dz,
+                            to.getX() + dx, to.getY() + dy, to.getZ() + dz);
+                }
+            }
+        }
+    }
+
+    private void record(MoveKind kind, int fx, int fy, int fz, int tx, int ty, int tz) {
+        LongArrayList steps = blocked.computeIfAbsent(BlockPos.asLong(fx, fy, fz), k -> new LongArrayList());
+        long to = BlockPos.asLong(tx, ty, tz);
         for (int i = 0; i < steps.size(); i += 2) {
-            if (steps.getLong(i) == kind.ordinal() && steps.getLong(i + 1) == to.asLong()) {
+            if (steps.getLong(i) == kind.ordinal() && steps.getLong(i + 1) == to) {
                 return;
             }
         }
         steps.add(kind.ordinal());
-        steps.add(to.asLong());
+        steps.add(to);
         changed = true;
     }
 
