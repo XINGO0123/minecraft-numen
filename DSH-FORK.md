@@ -37,6 +37,15 @@ $env:JAVA_HOME='D:\game\MC\runtime\jdk-21.0.13+9'
 
 首次构建要下 Gradle 9.7.1 与 NeoForge/Minecraft 依赖，几分钟到十几分钟；之后增量构建很快。
 
+**本机网络的坑**：`maven.neoforged.net` 在本地解析被污染（返回的是别人的 IP，连上去超时），
+`neoform-runtime` 这类只在它上面有的坐标就取不到。两条路：
+
+1. 开代理后再构建（Gradle 认 `systemProp.https.proxyHost/Port`，写在 `~/.gradle/gradle.properties`）；
+2. 让 GitHub 构：推一次 `dsh/stable` 就会跑 `.github/workflows/dsh-jar.yml`，在 Actions 的 run 页面下
+   `numen-neoforge-jar` 制品就是 jar。`maven` 解析在 runner 上是干净的。
+
+只为补 mavenCentral 上缺失的坐标，本机装过 `~/.gradle/init.d/mirrors.gradle`（阿里云镜像）。
+
 ## 部署到本机实例
 
 ```powershell
