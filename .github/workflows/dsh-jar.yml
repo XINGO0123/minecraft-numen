@@ -1,0 +1,53 @@
+name: Build jar (dsh)
+
+# 这条分支只为「拿一个能玩的 jar」服务:推 dsh/stable 或手动触发,构建 :numen:neoforge 并留下 jar。
+# 上游的 build.yml 只管 1.21.1,而本机访问 maven.neoforged.net 需要干净的网络,所以让 GitHub 干这件事。
+
+on:
+  push:
+    branches: ["dsh/stable"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Read target JDK from gradle.properties
+        id: props
+        shell: bash
+        run: |
+          echo "java_version=$(grep -E '^java_version=' gradle.properties | head -n1 | cut -d= -f2-)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java ${{ steps.props.outputs.java_version }}
+        uses: actions/setup-java@v6
+        with:
+          java-version: ${{ steps.props.outputs.java_version }}
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      # 只编 NeoForge 一个 loader;测试另跑,这里要的是产物。
+      - name: Build NeoForge jar
+        run: ./gradlew :numen:neoforge:build -x test --no-daemon -x javadoc
+
+      - name: Collect jar
+        shell: bash
+        run: |
+          mkdir -p dist
+          ls -l numen/neoforge/build/libs/
+          cp numen/neoforge/build/libs/*.jar dist/
+          ls -l dist/
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v5
+        with:
+          name: numen-neoforge-jar
+          path: dist/*.jar
+          if-no-files-found: error
